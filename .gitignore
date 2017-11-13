@@ -1,0 +1,8 @@
+# Composer files
+/vendor/
+
+# Editor files
+nbproject
+*.po~
+.idea
+/.vs/*
