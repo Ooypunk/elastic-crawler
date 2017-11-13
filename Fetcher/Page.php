@@ -4,6 +4,8 @@ namespace ElasticCrawler\Fetcher;
 
 /**
  * Page
+ * 
+ * @author Ooypunk
  */
 class Page {
 
