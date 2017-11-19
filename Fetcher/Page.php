@@ -10,12 +10,18 @@ namespace ElasticCrawler\Fetcher;
 class Page {
 
 	private $url;
+	private $config;
 	private $curl_info;
-	private $curl_headers = [];
 	private $curl_body;
+	private $header;
 
 	public function __construct($url) {
 		$this->url = $url;
+		$this->header = new PageHeader;
+
+		# @todo Fill $config from a config file, or as argument in constructor
+		$config = new \stdClass();
+		$this->config = $config;
 	}
 
 	public function runCurl() {
@@ -29,6 +35,9 @@ class Page {
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
 		curl_setopt($ch, CURLOPT_HEADERFUNCTION, array($this, 'parseHeaderLine'));
+		if (isset($this->config->curl_user_agent)) {
+			curl_setopt($ch, CURLOPT_USERAGENT, $this->config->curl_user_agent);
+		}
 
 		// $output contains the output string
 		$this->curl_body = curl_exec($ch);
@@ -38,30 +47,28 @@ class Page {
 		curl_close($ch);
 	}
 
+	/**
+	 * Helper function for runCurl(): trim given header line, then add it to
+	 * list of header lines
+	 * @param Resource $curl Curl instance
+	 * @param string $line Header line
+	 * @return int String length of header line
+	 */
 	public function parseHeaderLine($curl, $line) {
-		$this->curl_headers[] = trim($line);
+		$this->header->addLine($line);
 		return strlen($line);
-	}
-
-	public function getHeader() {
-		return $this->curl_headers;
 	}
 
 	public function getBody() {
 		return $this->curl_body;
 	}
 
-	public function isRedirect() {
-		$code = $this->curl_info['http_code'];
-		if ($code >= 300 && $code < 400) {
-			return true;
-		}
-		foreach ($this->getHeader() as $line) {
-			if (substr($line, 0, 8) === 'Refresh:') {
-				return true;
-			}
-		}
-		return false;
+	public function getHttpCode() {
+		return $this->header->getHttpCode();
+	}
+
+	public function getContentType() {
+		return $this->header->getContentType();
 	}
 
 }
