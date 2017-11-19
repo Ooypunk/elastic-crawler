@@ -3,7 +3,6 @@
 namespace ElasticCrawler\Fetcher;
 
 use ElasticCrawler\CrawlBase;
-use Elasticsearch\ClientBuilder;
 use ElasticCrawler\Fetcher\Page;
 
 /**
@@ -15,33 +14,38 @@ use ElasticCrawler\Fetcher\Page;
 class Fetcher extends CrawlBase {
 
 	public function run() {
+		// Get page to do
 		$body = $this->getFirstNextPage();
-		if (!isset($body['url'])) {
+		$source = $body['_source'];
+		if (!isset($source['url'])) {
 			throw new \Exception("Fout! Geen URL gevonden\n");
 		}
 
-		$page = new Page($body['url']);
+		// Use Page class to get contents of URL
+		$page = new Page('https://dossier.dgict.nl/');
 		$page->runCurl();
 
-		var_dump($page->getBody());
-		die('@debug in ' . __FILE__ . ' @' . __LINE__ . "\n");
+		// Compose update body
+		$update_body = $this->getUpdateBody($body);
+
+		// Add new data to updatebody
+		$update_body['body']['doc']['http_code'] = $page->getHttpCode();
+		$update_body['body']['doc']['content_type'] = $page->getContentType();
+		$update_body['body']['doc']['body'] = $page->getBody();
+
+		// Save new body to database
+		$this->update($update_body);
 	}
 
 	private function getFirstNextPage() {
-		// @todo Move to some configuration file
-		$hosts = [
-			'192.168.56.101',
-		];
-		$client = ClientBuilder::create()->setHosts($hosts)->build();
-
 		$params = $this->getFirstNextPageParams();
-		$response = $client->search($params);
+		$response = $this->getClient()->search($params);
 		$hits_nr = $response['hits']['total'];
 		if ($hits_nr === 0) {
 			throw new \Exception("Geen records gevonden\n");
 		}
 
-		return $response['hits']['hits'][0]['_source'];
+		return $response['hits']['hits'][0];
 	}
 
 	private function getFirstNextPageParams() {
@@ -63,6 +67,20 @@ class Fetcher extends CrawlBase {
 			]
 		];
 		return $params;
+	}
+
+	private function getUpdateBody(array $body) {
+		$update_body = [];
+		$map = [
+			'_index' => 'index',
+			'_type' => 'type',
+			'_id' => 'id',
+		];
+		foreach ($map as $from => $to) {
+			$update_body[$to] = $body[$from];
+		}
+		$update_body['body']['doc'] = [];
+		return $update_body;
 	}
 
 }
